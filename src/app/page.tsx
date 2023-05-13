@@ -1,113 +1,245 @@
-import Image from 'next/image'
+"use client";
+import React, { useState } from "react";
+import { read, utils, writeFile } from "xlsx";
+
+type TData = {
+  kode: string;
+  nama: string;
+  jenis: string;
+};
+
+const temp: TData[] = [
+  {
+    kode: "",
+    nama: "nama barang satu",
+    jenis: "jenis",
+  },
+  {
+    kode: "",
+    nama: "nama barang dua",
+    jenis: "jenis",
+  },
+  {
+    kode: "",
+    nama: "nama test 3",
+    jenis: "jenis",
+  },
+  {
+    kode: "",
+    nama: "nama barang dua",
+    jenis: "jenis",
+  },
+  {
+    kode: "",
+    nama: "nama waduh le",
+    jenis: "jenis",
+  },
+];
 
 export default function Home() {
+  const [original, setOriginal] = useState<TData[]>();
+  const [generatedCode, setGeneratedCode] = useState<TData[]>([]);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showOriginal, setShowOriginal] = useState<boolean>(false);
+  const [showResult, setShowResult] = useState<boolean>(true);
+
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files?.length) {
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const wb = read(event?.target?.result);
+        const sheets = wb.SheetNames;
+
+        if (sheets.length) {
+          const rows: TData[] = utils.sheet_to_json(wb.Sheets[sheets[0]]);
+          setOriginal(rows);
+          setShowOriginal(true);
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+  };
+
+  const handleExport = () => {
+    const headings = [["Nama", "Jenis", "Kode"]];
+    const wb = utils.book_new();
+    const ws = utils.json_to_sheet([]);
+    utils.sheet_add_aoa(ws, headings);
+    utils.sheet_add_json(ws, generatedCode, { origin: "A2", skipHeader: true });
+    utils.book_append_sheet(wb, ws, "Generate");
+    writeFile(wb, "Hasil Generate.xlsx");
+  };
+
+  const getFirstCharacter = (text: string) => {
+    // convert str to array
+    let result = [""];
+    result = text.split(" ").map((t) => Array.from(t)[0]);
+    return result.join("");
+  };
+
+  const generateCode = (data: TData, lastGenerated: TData[]): string => {
+    const code =
+      getFirstCharacter(data.jenis) + "-" + getFirstCharacter(data.nama);
+    // check code is exists
+    return code.toUpperCase();
+  };
+
+  const isValidCode = (data: TData[], keyword: string) => {
+    const found = data.find((obj) => {
+      return obj.kode === keyword;
+    });
+    return found ? true : false;
+  };
+
+  const handleGenerate = () => {
+    try {
+      setLoading(true);
+      setGeneratedCode([]);
+      console.log("clear", generatedCode);
+      original?.map((item) => {
+        let code = generateCode(item, generatedCode);
+        setGeneratedCode((prevState) => [
+          ...prevState,
+          { ...item, kode: code },
+        ]);
+      });
+      setShowOriginal(false);
+      setLoading(false);
+    } catch (error) {
+      setLoading(false);
+    }
+  };
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
-        <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 bg-gradient-to-b from-zinc-200 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
-          Get started by editing&nbsp;
-          <code className="font-mono font-bold">src/app/page.tsx</code>
-        </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center bg-gradient-to-t from-white via-white dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
-          <a
-            className="pointer-events-none flex place-items-center gap-2 p-8 lg:pointer-events-auto lg:p-0"
-            href="https://vercel.com?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+    <main className="flex flex-col items-center justify-between m-8 md:m-24">
+      <div className="w-full flex flex-col gap-4 md:gap-0 md:flex-row md:justify-between">
+        <div className="">
+          <label
+            htmlFor="file"
+            className="px-4 py-2 text-sm bg-teal-500 rounded-md font-medium hover:bg-teal-600 ring-1 ring-teal-500 hover:ring-teal-600 text-white cursor-pointer  flex items-center justify-center gap-2 "
           >
-            By{' '}
-            <Image
-              src="/vercel.svg"
-              alt="Vercel Logo"
-              className="dark:invert"
-              width={100}
-              height={24}
-              priority
+            Upload File Excel
+          </label>
+          <input
+            type="file"
+            name="file"
+            className="hidden"
+            id="file"
+            required
+            onChange={(e) => handleImport(e)}
+            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+          />
+        </div>
+        <a
+          href="/format-excel.xlsx"
+          download
+          className="flex items-center gap-2 justify-center px-4 py-2 text-sm text-teal-500 rounded-md font-medium ring-1 ring-teal-500 hover:bg-teal-500 hover:text-white  "
+        >
+          Download Format
+        </a>
+        <button
+          className="flex items-center gap-2 justify-center px-4 py-2 text-sm text-teal-500 rounded-md font-medium ring-1 ring-teal-500 hover:bg-teal-500 hover:text-white  "
+          onClick={handleExport}
+        >
+          Download Hasil
+        </button>
+      </div>
+      <div className="w-full border rounded-md p-2 border-gray-200 shadow-lg mt-8">
+        <div className="p-4 inline-flex gap-2">
+          <div className="flex items-center">
+            <input
+              id="check-original"
+              type="checkbox"
+              onChange={(e) => setShowOriginal(e.target.checked)}
+              checked={showOriginal}
+              className="w-4 h-4 accent-teal-500 text-teal-600 bg-teal-100 border-teal-300 rounded focus:ring-teal-500 "
             />
-          </a>
+            <label
+              htmlFor="check-original"
+              className="ml-2 text-sm font-medium text-gray-900"
+            >
+              Show Original
+            </label>
+          </div>
+          <div className="flex items-center">
+            <input
+              id="check-result"
+              type="checkbox"
+              onChange={(e) => setShowResult(e.target.checked)}
+              checked={showResult}
+              className="w-4 h-4 accent-teal-500 text-teal-600 bg-teal-100 border-teal-300 rounded focus:ring-teal-500 "
+            />
+            <label
+              htmlFor="check-result"
+              className="ml-2 text-sm font-medium text-gray-900"
+            >
+              Show Result
+            </label>
+          </div>
+        </div>
+
+        <div className="relative overflow-x-auto w-full">
+          <table className="w-full text-sm">
+            <thead className="text-xs text-gray-700 uppercase bg-gray-50 ">
+              <tr>
+                <th scope="col" className="px-6 py-3">
+                  No
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  <div className="inline-flex items-center gap-2">
+                    <span>Kode Barang</span>
+                    <button
+                      disabled={loading}
+                      className="px-2 py-1.5 rounded-md bg-emerald-500 text-white"
+                      onClick={() => {
+                        handleGenerate();
+                      }}
+                    >
+                      {loading ? "Please wait" : "Generate"}
+                    </button>
+                  </div>
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  Nama Barang
+                </th>
+                <th scope="col" className="px-6 py-3">
+                  Jenis Barang
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {showOriginal &&
+                (original ?? []).map((item, index) => (
+                  <tr key={index} className="bg-white border-b">
+                    <td className="px-6 py-4">{++index}</td>
+                    <td className="px-6 py-4">{item.kode}</td>
+                    <td className="px-6 py-4">{item.nama}</td>
+                    <td className="px-6 py-4">{item.jenis}</td>
+                  </tr>
+                ))}
+              {showResult && (
+                <React.Fragment>
+                  <tr className="bg-white border-b">
+                    <td className="px-6 py-4" colSpan={6}>
+                      Result
+                    </td>
+                  </tr>
+                  {(generatedCode ?? []).map((item, index) => (
+                    <tr key={index} className="bg-white border-b">
+                      <td className="px-6 py-4">{++index}</td>
+                      <td className="px-6 py-4">{item.kode.toUpperCase()}</td>
+                      <td className="px-6 py-4">{item.nama}</td>
+                      <td className="px-6 py-4">{item.jenis}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
-
-      <div className="relative flex place-items-center before:absolute before:h-[300px] before:w-[480px] before:-translate-x-1/2 before:rounded-full before:bg-gradient-radial before:from-white before:to-transparent before:blur-2xl before:content-[''] after:absolute after:-z-20 after:h-[180px] after:w-[240px] after:translate-x-1/3 after:bg-gradient-conic after:from-sky-200 after:via-blue-200 after:blur-2xl after:content-[''] before:dark:bg-gradient-to-br before:dark:from-transparent before:dark:to-blue-700 before:dark:opacity-10 after:dark:from-sky-900 after:dark:via-[#0141ff] after:dark:opacity-40 before:lg:h-[360px]">
-        <Image
-          className="relative dark:drop-shadow-[0_0_0.3rem_#ffffff70] dark:invert"
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        />
-      </div>
-
-      <div className="mb-32 grid text-center lg:mb-0 lg:grid-cols-4 lg:text-left">
-        <a
-          href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Docs{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Find in-depth information about Next.js features and API.
-          </p>
-        </a>
-
-        <a
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800 hover:dark:bg-opacity-30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Learn{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Learn about Next.js in an interactive course with&nbsp;quizzes!
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Templates{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Explore the Next.js 13 playground.
-          </p>
-        </a>
-
-        <a
-          href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          className="group rounded-lg border border-transparent px-5 py-4 transition-colors hover:border-gray-300 hover:bg-gray-100 hover:dark:border-neutral-700 hover:dark:bg-neutral-800/30"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <h2 className={`mb-3 text-2xl font-semibold`}>
-            Deploy{' '}
-            <span className="inline-block transition-transform group-hover:translate-x-1 motion-reduce:transform-none">
-              -&gt;
-            </span>
-          </h2>
-          <p className={`m-0 max-w-[30ch] text-sm opacity-50`}>
-            Instantly deploy your Next.js site to a shareable URL with Vercel.
-          </p>
-        </a>
-      </div>
     </main>
-  )
+  );
 }
