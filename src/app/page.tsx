@@ -1,47 +1,21 @@
 "use client";
 import React, { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { read, utils, writeFile } from "xlsx";
-
-type TData = {
-  kode: string;
-  nama: string;
-  jenis: string;
-};
-
-const temp: TData[] = [
-  {
-    kode: "",
-    nama: "nama barang satu",
-    jenis: "jenis",
-  },
-  {
-    kode: "",
-    nama: "nama barang dua",
-    jenis: "jenis",
-  },
-  {
-    kode: "",
-    nama: "nama test 3",
-    jenis: "jenis",
-  },
-  {
-    kode: "",
-    nama: "nama barang dua",
-    jenis: "jenis",
-  },
-  {
-    kode: "",
-    nama: "nama waduh le",
-    jenis: "jenis",
-  },
-];
+import {
+  TData,
+  setGeneratedData,
+  setLoading,
+  setOriginalData,
+} from "./redux/features/generate/generateSlice";
+import { AppDispatch, RootState } from "./redux/store";
 
 export default function Home() {
-  const [original, setOriginal] = useState<TData[]>();
-  const [generatedCode, setGeneratedCode] = useState<TData[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
   const [showOriginal, setShowOriginal] = useState<boolean>(false);
   const [showResult, setShowResult] = useState<boolean>(true);
+
+  const state = useSelector((state: RootState) => state.generate);
+  const dispatch: AppDispatch = useDispatch();
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -54,7 +28,7 @@ export default function Home() {
 
         if (sheets.length) {
           const rows: TData[] = utils.sheet_to_json(wb.Sheets[sheets[0]]);
-          setOriginal(rows);
+          dispatch(setOriginalData(rows));
           setShowOriginal(true);
         }
       };
@@ -67,7 +41,10 @@ export default function Home() {
     const wb = utils.book_new();
     const ws = utils.json_to_sheet([]);
     utils.sheet_add_aoa(ws, headings);
-    utils.sheet_add_json(ws, generatedCode, { origin: "A2", skipHeader: true });
+    utils.sheet_add_json(ws, state.rowsGenerated, {
+      origin: "A2",
+      skipHeader: true,
+    });
     utils.book_append_sheet(wb, ws, "Generate");
     writeFile(wb, "Hasil Generate.xlsx");
   };
@@ -87,28 +64,32 @@ export default function Home() {
   };
 
   const isValidCode = (data: TData[], keyword: string) => {
-    const found = data.find((obj) => {
-      return obj.kode === keyword;
+    const found = data.filter((obj) => {
+      return obj.kode.includes(keyword);
     });
-    return found ? true : false;
+    if (found.length > 0) {
+      return keyword + found.length;
+    } else {
+      return keyword;
+    }
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     try {
-      setLoading(true);
-      setGeneratedCode([]);
-      console.log("clear", generatedCode);
-      original?.map((item) => {
-        let code = generateCode(item, generatedCode);
-        setGeneratedCode((prevState) => [
-          ...prevState,
-          { ...item, kode: code },
-        ]);
-      });
+      dispatch(setLoading(true));
+      dispatch(setGeneratedData([]));
+      setTimeout(() => {
+        let tempGenerate: TData[] = [];
+        state.rowsOriginal?.map((item, index) => {
+          let code = generateCode(item, state.rowsGenerated);
+          tempGenerate.push({ ...item, kode: isValidCode(tempGenerate, code) });
+        });
+        dispatch(setGeneratedData(tempGenerate));
+      }, 1000);
       setShowOriginal(false);
-      setLoading(false);
+      dispatch(setLoading(false));
     } catch (error) {
-      setLoading(false);
+      dispatch(setLoading(false));
     }
   };
 
@@ -191,13 +172,13 @@ export default function Home() {
                   <div className="inline-flex items-center gap-2">
                     <span>Kode Barang</span>
                     <button
-                      disabled={loading}
+                      disabled={state.loading}
                       className="px-2 py-1.5 rounded-md bg-emerald-500 text-white"
                       onClick={() => {
                         handleGenerate();
                       }}
                     >
-                      {loading ? "Please wait" : "Generate"}
+                      {state.loading ? "Please wait" : "Generate"}
                     </button>
                   </div>
                 </th>
@@ -211,7 +192,7 @@ export default function Home() {
             </thead>
             <tbody>
               {showOriginal &&
-                (original ?? []).map((item, index) => (
+                (state.rowsOriginal ?? []).map((item, index) => (
                   <tr key={index} className="bg-white border-b">
                     <td className="px-6 py-4">{++index}</td>
                     <td className="px-6 py-4">{item.kode}</td>
@@ -226,7 +207,7 @@ export default function Home() {
                       Result
                     </td>
                   </tr>
-                  {(generatedCode ?? []).map((item, index) => (
+                  {(state.rowsGenerated ?? []).map((item, index) => (
                     <tr key={index} className="bg-white border-b">
                       <td className="px-6 py-4">{++index}</td>
                       <td className="px-6 py-4">{item.kode.toUpperCase()}</td>
